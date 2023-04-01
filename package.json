@@ -29,7 +29,8 @@
   "homepage": "https://github.com/xenova/transformers.js#readme",
   "dependencies": {
     "jimp": "^0.22.7",
-    "onnxruntime-web": "^1.14.0"
+    "onnxruntime-web": "^1.14.0",
+    "web-audio-api": "^0.2.2"
   },
   "optionalDependencies": {
     "onnxruntime-node": "^1.14.0"
