@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/github/license/xenova/transformers.js)](https://github.com/xenova/transformers.js/blob/main/LICENSE)
 
 
-Run 🤗 Transformers in your browser! We currently support [BERT](https://huggingface.co/docs/transformers/model_doc/bert), [ALBERT](https://huggingface.co/docs/transformers/model_doc/albert), [DistilBERT](https://huggingface.co/docs/transformers/model_doc/distilbert), [T5](https://huggingface.co/docs/transformers/model_doc/t5), [T5v1.1](https://huggingface.co/docs/transformers/model_doc/t5v1.1), [FLAN-T5](https://huggingface.co/docs/transformers/model_doc/flan-t5), [mT5](https://huggingface.co/docs/transformers/model_doc/mt5), [GPT2](https://huggingface.co/docs/transformers/model_doc/gpt2), [GPT Neo](https://huggingface.co/docs/transformers/model_doc/gpt_neo), [BART](https://huggingface.co/docs/transformers/model_doc/bart), [CodeGen](https://huggingface.co/docs/transformers/model_doc/codegen), [Whisper](https://huggingface.co/docs/transformers/model_doc/whisper), [CLIP](https://huggingface.co/docs/transformers/model_doc/clip), [Vision Transformer](https://huggingface.co/docs/transformers/model_doc/vit), [VisionEncoderDecoder](https://huggingface.co/docs/transformers/model_doc/vision-encoder-decoder), and [DETR](https://huggingface.co/docs/transformers/model_doc/detr) models, for a variety of tasks including: masked language modelling, text classification, text-to-text generation, translation, summarization, question answering, text generation, automatic speech recognition, image classification, zero-shot image classification, image-to-text, and object detection.
+Run 🤗 Transformers in your browser! We currently support [BERT](https://huggingface.co/docs/transformers/model_doc/bert), [ALBERT](https://huggingface.co/docs/transformers/model_doc/albert), [DistilBERT](https://huggingface.co/docs/transformers/model_doc/distilbert), [MobileBERT](https://huggingface.co/docs/transformers/model_doc/mobilebert), [SqueezeBERT](https://huggingface.co/docs/transformers/model_doc/squeezebert), [T5](https://huggingface.co/docs/transformers/model_doc/t5), [T5v1.1](https://huggingface.co/docs/transformers/model_doc/t5v1.1), [FLAN-T5](https://huggingface.co/docs/transformers/model_doc/flan-t5), [mT5](https://huggingface.co/docs/transformers/model_doc/mt5), [GPT2](https://huggingface.co/docs/transformers/model_doc/gpt2), [GPT Neo](https://huggingface.co/docs/transformers/model_doc/gpt_neo), [BART](https://huggingface.co/docs/transformers/model_doc/bart), [CodeGen](https://huggingface.co/docs/transformers/model_doc/codegen), [Whisper](https://huggingface.co/docs/transformers/model_doc/whisper), [CLIP](https://huggingface.co/docs/transformers/model_doc/clip), [Vision Transformer](https://huggingface.co/docs/transformers/model_doc/vit), [VisionEncoderDecoder](https://huggingface.co/docs/transformers/model_doc/vision-encoder-decoder), and [DETR](https://huggingface.co/docs/transformers/model_doc/detr) models, for a variety of tasks including: masked language modelling, text classification, zero-shot classification, text-to-text generation, translation, summarization, question answering, text generation, automatic speech recognition, image classification, zero-shot image classification, image-to-text, and object detection.
 
 ![teaser](https://user-images.githubusercontent.com/26504141/221056008-e906614e-e6f0-4e10-b0a8-7d5c99e955b4.gif)
 
@@ -105,12 +105,12 @@ This library uses `onnxruntime-web` as its default backend. However, if your app
 ### Convert your PyTorch models to ONNX
 We use [ONNX Runtime](https://onnxruntime.ai/) to run the models in the browser, so you must first convert your PyTorch model to ONNX (which can be done using our conversion script). In general, the command will look something like this:
 ```
-python ./scripts/convert.py --model_id <hf_model_id> --from_hub --quantize --task <task>
+python -m scripts.convert --model_id <hf_model_id> --from_hub --quantize --task <task>
 ```
 
 For example, to use `bert-base-uncased` for masked language modelling, you can use the command:
 ```
-python ./scripts/convert.py --model_id bert-base-uncased --from_hub --quantize --task masked-lm
+python -m scripts.convert --model_id bert-base-uncased --from_hub --quantize --task masked-lm
 ```
 
 If you want to use a local model, remove the `--from_hub` flag from above and place your PyTorch model in the `./models/pytorch/` folder. You can also choose a different location by specifying the parent input folder with `--input_parent_dir /path/to/parent_dir/` (note: without the model id). 
@@ -118,7 +118,7 @@ If you want to use a local model, remove the `--from_hub` flag from above and pl
 
 Alternatively, you can find some of the models we have already converted [here](https://huggingface.co/Xenova/transformers.js). For example, to use `bert-base-uncased` for masked language modelling, you can use the model found at [https://huggingface.co/Xenova/transformers.js/tree/main/quantized/bert-base-uncased/masked-lm](https://huggingface.co/Xenova/transformers.js/tree/main/quantized/bert-base-uncased/masked-lm).
 
-*Note:* We recommend quantizing the model (`--quantize`) to reduce model size and improve inference speeds (at the expense of a slight decrease in accuracy). For more information, run the help command: `python ./scripts/convert.py -h`.
+*Note:* We recommend quantizing the model (`--quantize`) to reduce model size and improve inference speeds (at the expense of a slight decrease in accuracy). For more information, run the help command: `python -m scripts.convert -h`.
 
 
 ### Options
