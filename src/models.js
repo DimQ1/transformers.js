@@ -1363,6 +1363,7 @@ class AutoModelForSeq2SeqLM {
         if (!cls) {
             throw Error(`Unsupported model type: ${config.model_type}`)
         }
+        //whisper config.json, encoder_model.onnx, decoder_model_merged.onnx, generation_config.json
         return new cls(...info)
     }
 }
