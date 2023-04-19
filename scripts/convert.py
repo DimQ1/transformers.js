@@ -159,8 +159,6 @@ def copy_if_exists(model_path, file_name, destination):
 
 def main():
 
-    # Helper script to fix inconsistencies between optimum exporter and other exporters.
-    # T5 uses similar approach to fastT5 (https://github.com/Ki6an/fastT5)
     parser = HfArgumentParser(
         (ConversionArguments, )
     )
@@ -235,7 +233,7 @@ def main():
         # Handle special cases
         if model.config.model_type == 'marian':
             import json
-            from .tokenizers.marian import generate_tokenizer_json
+            from .extra.marian import generate_tokenizer_json
             tokenizer_json = generate_tokenizer_json(model_path, tokenizer)
 
             with open(os.path.join(output_model_folder, 'tokenizer.json'), 'w', encoding='utf-8') as fp:

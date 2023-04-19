@@ -1,12 +1,29 @@
+from .extra.marian import SUPPORTED_HELSINKI_NLP_MODELS
 
 SUPPORTED_TASKS = {
     # map tasks to automodels
     'default': 'AutoModel',
     'masked-lm': 'AutoModelForMaskedLM',
+    'causal-lm': 'AutoModelForCausalLM',
+    'seq2seq-lm': 'AutoModelForSeq2SeqLM',
     'sequence-classification': 'AutoModelForSequenceClassification',
-    'multiple-choice': 'AutoModelForMultipleChoice',
     'token-classification': 'AutoModelForTokenClassification',
+    # 'multiple-choice': 'AutoModelForMultipleChoice',
+    'object-detection': 'AutoModelForObjectDetection',
     'question-answering': 'AutoModelForQuestionAnswering',
+    'image-classification': 'AutoModelForImageClassification',
+    # 'image-segmentation': 'AutoModelForImageSegmentation',
+    # 'masked-im': 'AutoModelForMaskedImageModeling',
+    # 'semantic-segmentation': 'AutoModelForSemanticSegmentation',
+    'speech2seq-lm': 'AutoModelForSpeechSeq2Seq',
+    # 'audio-classification': 'AutoModelForAudioClassification',
+    # 'audio-frame-classification': 'AutoModelForAudioFrameClassification',
+    # 'audio-ctc': 'AutoModelForCTC',
+    # 'audio-xvector': 'AutoModelForAudioXVector',
+    'vision2seq-lm': 'AutoModelForVision2Seq',
+    # 'stable-diffusion': 'StableDiffusionPipeline',
+    'zero-shot-image-classification': 'AutoModelForZeroShotImageClassification',
+    'zero-shot-object-detection': 'AutoModelForZeroShotObjectDetection',
 }
 
 SUPPORTED_MODELS = {
@@ -64,6 +81,32 @@ SUPPORTED_MODELS = {
         'sentence-transformers/all-MiniLM-L12-v2': [
             'default',
         ],
+
+
+        'Davlan/bert-base-multilingual-cased-ner-hrl': [
+            # 'default',
+            'token-classification',
+        ],
+        'ckiplab/bert-base-chinese-ner': [
+            # 'default',
+            'token-classification',
+        ],
+        'ckiplab/bert-base-chinese-ws': [
+            # 'default',
+            'token-classification',
+        ],
+        'ckiplab/bert-base-chinese-pos': [
+            # 'default',
+            'token-classification',
+        ],
+        'dslim/bert-base-NER': [
+            # 'default',
+            'token-classification',
+        ],
+        'dslim/bert-base-NER-uncased': [
+            # 'default',
+            'token-classification',
+        ],
     },
     'blenderbot-small': {
         'facebook/blenderbot_small-90M': [
@@ -105,6 +148,11 @@ SUPPORTED_MODELS = {
             'object-detection',
             # 'image-segmentation',
         ],
+
+        'facebook/detr-resnet-50-panoptic': [
+            'image-segmentation',
+        ],
+        
     },
     'distilbert': {
         'distilbert-base-uncased': [
@@ -129,7 +177,12 @@ SUPPORTED_MODELS = {
         'typeform/distilbert-base-uncased-mnli': [
             'default',
             'sequence-classification',
-        ]
+        ],
+
+        'Davlan/distilbert-base-multilingual-cased-ner-hrl': [
+            # 'default',
+            'token-classification',
+        ],
     },
     'gpt-neo': {
         'EleutherAI/gpt-neo-125M': [
@@ -150,104 +203,11 @@ SUPPORTED_MODELS = {
         ]
     },
     'marian': {
-        'Helsinki-NLP/opus-mt-en-es': [
+        f'Helsinki-NLP/opus-mt-{x}': [
             'default',
             'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-es-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-fr': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-fr-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-hi': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-hi-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-de': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-de-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-ru': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-ru-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-it': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-it-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-ar': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-ar-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-zh': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-zh-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-sv': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-sv-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-mul': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-mul-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-nl': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-nl-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-en-fi': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-        'Helsinki-NLP/opus-mt-fi-en': [
-            'default',
-            'seq2seq-lm-with-past',
-        ],
-
-        # TODO add more models, or dynamically generate this list
+        ]
+        for x in SUPPORTED_HELSINKI_NLP_MODELS
     },
     'mobilebert': {
         'google/mobilebert-uncased': [

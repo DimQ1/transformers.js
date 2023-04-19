@@ -2,6 +2,15 @@ const fs = require('fs');
 
 const { env } = require('./env.js');
 
+if (global.ReadableStream === undefined && typeof process !== 'undefined') {
+    try {
+        // @ts-ignore
+        global.ReadableStream = require('node:stream/web').ReadableStream; // ReadableStream is not a global with Node 16
+    } catch (err) {
+        console.warn("ReadableStream not defined and unable to import from node:stream/web");
+    }
+}
+
 class FileResponse {
   constructor(filePath) {
     this.filePath = filePath;
@@ -90,6 +99,12 @@ class FileResponse {
   }
 }
 
+/**
+ * Determines whether the given string is a valid HTTP or HTTPS URL.
+ * @function
+ * @param {string|URL} string - The string to test for validity as an HTTP or HTTPS URL.
+ * @returns {boolean} - True if the string is a valid HTTP or HTTPS URL, false otherwise.
+ */
 function isValidHttpUrl(string) {
   // https://stackoverflow.com/a/43467144
   let url;
@@ -101,6 +116,14 @@ function isValidHttpUrl(string) {
   return url.protocol === 'http:' || url.protocol === 'https:';
 }
 
+/**
+ * Helper function to get a file, using either the Fetch API or FileSystem API.
+ *
+ * @async
+ * @function getFile
+ * @param {string|URL} url - The URL of the file to get.
+ * @returns {Promise<FileResponse|Response>} A promise that resolves to a FileResponse object (if the file is retrieved using the FileSystem API), or a Response object (if the file is retrieved using the Fetch API).
+ */
 async function getFile(url) {
   // Helper function to get a file, using either the Fetch API or FileSystem API
 
@@ -111,6 +134,14 @@ async function getFile(url) {
   }
 }
 
+/**
+ * Helper function to dispatch progress callbacks.
+ *
+ * @function dispatchCallback
+ * @param {function} progressCallback - The progress callback function to dispatch.
+ * @param {any} data - The data to pass to the progress callback function.
+ * @returns {void}
+ */
 function dispatchCallback(progressCallback, data) {
   if (progressCallback !== null) progressCallback(data);
 }
@@ -254,6 +285,12 @@ async function readResponse(response, progressCallback) {
   return buffer;
 }
 
+/**
+ * Joins multiple parts of a path into a single path, while handling leading and trailing slashes.
+ *
+ * @param {...string} parts - Multiple parts of a path.
+ * @returns {string} A string representing the joined path.
+ */
 function pathJoin(...parts) {
   // https://stackoverflow.com/a/55142565
   parts = parts.map((part, index) => {
@@ -268,6 +305,13 @@ function pathJoin(...parts) {
   return parts.join('/');
 }
 
+/**
+ * Reverses the keys and values of an object.
+ *
+ * @param {object} data - The object to reverse.
+ * @returns {object} The reversed object.
+ * @see https://ultimatecourses.com/blog/reverse-object-keys-and-values-in-javascript
+ */
 function reverseDictionary(data) {
   // https://ultimatecourses.com/blog/reverse-object-keys-and-values-in-javascript
   return Object.fromEntries(
@@ -275,6 +319,12 @@ function reverseDictionary(data) {
   );
 }
 
+/**
+ * Returns the index of the maximum value in an array.
+ * @param {Array} arr - The input array.
+ * @see https://stackoverflow.com/a/11301464
+ * @returns {number} - The index of the maximum value in the array.
+ */
 function indexOfMax(arr) {
   // https://stackoverflow.com/a/11301464
 
@@ -311,6 +361,11 @@ function softmax(arr) {
   return softmaxArr;
 }
 
+/**
+ * Calculates the logarithm of the softmax function for the input array.
+ * @param {number[]} arr - The input array to calculate the log_softmax function for.
+ * @returns {any} - The resulting log_softmax array.
+ */
 function log_softmax(arr) {
   // Compute the softmax values
   const softmaxArr = softmax(arr);
@@ -321,10 +376,23 @@ function log_softmax(arr) {
   return logSoftmaxArr;
 }
 
+/**
+ * Escapes regular expression special characters from a string by replacing them with their escaped counterparts.
+ *
+ * @param {string} string - The string to escape.
+ * @returns {string} - The escaped string.
+ */
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
+/**
+ * Get the top k items from an iterable, sorted by descending order
+ *
+ * @param {Array} items - The items to be sorted
+ * @param {number} [top_k=0] - The number of top items to return (default: 0 = return all)
+ * @returns {Array} - The top k items, sorted by descending order
+ */
 function getTopItems(items, top_k = 0) {
   // if top == 0, return all
 
@@ -339,10 +407,23 @@ function getTopItems(items, top_k = 0) {
   return items;
 }
 
+/**
+ * Calculates the dot product of two arrays.
+ * @param {number[]} arr1 - The first array.
+ * @param {number[]} arr2 - The second array.
+ * @returns {number} - The dot product of arr1 and arr2.
+ */
 function dot(arr1, arr2) {
   return arr1.reduce((acc, val, i) => acc + val * arr2[i], 0);
 }
 
+/**
+ * Computes the cosine similarity between two arrays.
+ *
+ * @param {number[]} arr1 - The first array.
+ * @param {number[]} arr2 - The second array.
+ * @returns {number} The cosine similarity between the two arrays.
+ */
 function cos_sim(arr1, arr2) {
   // Calculate dot product of the two arrays
   const dotProduct = dot(arr1, arr2);
@@ -359,6 +440,11 @@ function cos_sim(arr1, arr2) {
   return cosineSimilarity;
 }
 
+/**
+ * Calculates the magnitude of a given array.
+ * @param {number[]} arr - The array to calculate the magnitude of.
+ * @returns {number} The magnitude of the array.
+ */
 function magnitude(arr) {
   return Math.sqrt(arr.reduce((acc, val) => acc + val * val, 0));
 }
@@ -387,6 +473,29 @@ function min(arr) {
   return min;
 }
 
+
+/**
+ * Returns the maximum item.
+ * @param {number[]} arr - array of numbers.
+ * @returns {number} - the maximum number.
+ * @throws {Error} If array is empty.
+ */
+function max(arr) {
+    if (arr.length === 0) throw Error('Array must not be empty');
+    let max = arr[0];
+    for (let i = 1; i < arr.length; ++i) {
+        if (arr[i] > max) {
+            max = arr[i];
+        }
+    }
+    return max;
+}
+
+/**
+ * Check if a value is a string.
+ * @param {*} text - The value to check.
+ * @returns {boolean} - True if the value is a string, false otherwise.
+ */
 function isString(text) {
   return typeof text === 'string' || text instanceof String;
 }
@@ -395,6 +504,11 @@ function isIntegralNumber(x) {
   return Number.isInteger(x) || typeof x === 'bigint';
 }
 
+/**
+ * Check if a value is exists.
+ * @param {*} x - The value to check.
+ * @returns {boolean} - True if the value exists, false otherwise.
+ */
 function exists(x) {
   return x !== undefined && x !== null;
 }
