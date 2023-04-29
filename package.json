@@ -30,6 +30,7 @@
   "dependencies": {
     "jimp": "^0.22.7",
     "onnxruntime-web": "^1.14.0",
+    "pcm-util": "^3.0.0",
     "web-audio-api": "^0.2.2"
   },
   "optionalDependencies": {

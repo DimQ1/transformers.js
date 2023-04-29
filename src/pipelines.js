@@ -10,6 +10,8 @@ const {
 } = require('./utils.js');
 
 const { AudioContext } = require('web-audio-api');
+const pcmUtil = require('pcm-util');
+
 const { AutoTokenizer } = require('./tokenizers.js');
 const {
   AutoModel,
@@ -497,6 +499,12 @@ class AutomaticSpeechRecognitionPipeline extends Pipeline {
       // audio at all, this scaling factor may not be needed.
       const SCALING_FACTOR = Math.sqrt(2);
 
+      const originalSampleRate = decoded.sampleRate;
+
+      const sampleRateRatio = originalSampleRate / targetSampleRate;
+
+      audioBufferSourceNode.playbackRate.value = sampleRateRatio;
+
       if (decoded.numberOfChannels == 2) {
         let left = decoded.getChannelData(0);
         let right = decoded.getChannelData(1);
@@ -508,9 +516,9 @@ class AutomaticSpeechRecognitionPipeline extends Pipeline {
       } else {
         let left = decoded.getChannelData(0);
 
-        audio = new Float32Array(left.length);
+        audio = new Float32Array(decoded.length);
         for (let i = 0; i < decoded.length; i++) {
-          audio[i] = (SCALING_FACTOR * left[i]) / 2;
+          audio[i] = decoded[i];
         }
       }
     }

@@ -9,7 +9,7 @@ env.remoteModels = false;
 
 async function speech2text_generation() {
   // TODO add test case
-  let filePath = `d:/Users/Dimq1/source/OpenAI/transformers.js/assets/audio/zapis-razgovora-vika-elina-zvonit-mne_.wav`;
+  let filePath = `d:/Users/Dimq1/source/OpenAI/transformers.js/assets/audio/zapis-razgovora-vika-elina-zvonit-mne-2.wav`;
 
   // fs.readFile(filePath, (err, data) => {
   //   if (err) throw err;
@@ -20,7 +20,7 @@ async function speech2text_generation() {
 
   let transcriber = await pipeline(
     'automatic-speech-recognition',
-    'whisper-medium'
+    'openai/whisper-tiny'
   );
   let output = await transcriber(filePath);
   console.log(output);
