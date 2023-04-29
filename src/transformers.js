@@ -9,13 +9,14 @@ const {
 const {
     AutoModel,
     AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
     AutoModelForSeq2SeqLM,
     AutoModelForCausalLM,
     AutoModelForMaskedLM,
     AutoModelForQuestionAnswering,
     AutoModelForVision2Seq,
     AutoModelForImageClassification,
-    T5ForConditionalGeneration
+    AutoModelForObjectDetection,
 } = require("./models.js");
 
 const {
@@ -26,6 +27,7 @@ const {
 } = require("./pipelines.js");
 const { env } = require('./env.js');
 
+const { Tensor } = require('./tensor_utils.js');
 
 const moduleExports = {
     // Tokenizers
@@ -39,19 +41,20 @@ const moduleExports = {
     AutoModel,
     AutoModelForSeq2SeqLM,
     AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
     AutoModelForCausalLM,
     AutoModelForMaskedLM,
     AutoModelForQuestionAnswering,
     AutoModelForVision2Seq,
     AutoModelForImageClassification,
-
-    T5ForConditionalGeneration,
+    AutoModelForObjectDetection,
 
     // Processors
     AutoProcessor,
 
     // other
     pipeline,
+    Tensor,
 
     // environment variables
     env

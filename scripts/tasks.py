@@ -1,12 +1,29 @@
+from .extra.marian import SUPPORTED_HELSINKI_NLP_MODELS
 
 SUPPORTED_TASKS = {
     # map tasks to automodels
     'default': 'AutoModel',
     'masked-lm': 'AutoModelForMaskedLM',
+    'causal-lm': 'AutoModelForCausalLM',
+    'seq2seq-lm': 'AutoModelForSeq2SeqLM',
     'sequence-classification': 'AutoModelForSequenceClassification',
-    'multiple-choice': 'AutoModelForMultipleChoice',
     'token-classification': 'AutoModelForTokenClassification',
+    # 'multiple-choice': 'AutoModelForMultipleChoice',
+    'object-detection': 'AutoModelForObjectDetection',
     'question-answering': 'AutoModelForQuestionAnswering',
+    'image-classification': 'AutoModelForImageClassification',
+    # 'image-segmentation': 'AutoModelForImageSegmentation',
+    # 'masked-im': 'AutoModelForMaskedImageModeling',
+    # 'semantic-segmentation': 'AutoModelForSemanticSegmentation',
+    'speech2seq-lm': 'AutoModelForSpeechSeq2Seq',
+    # 'audio-classification': 'AutoModelForAudioClassification',
+    # 'audio-frame-classification': 'AutoModelForAudioFrameClassification',
+    # 'audio-ctc': 'AutoModelForCTC',
+    # 'audio-xvector': 'AutoModelForAudioXVector',
+    'vision2seq-lm': 'AutoModelForVision2Seq',
+    # 'stable-diffusion': 'StableDiffusionPipeline',
+    'zero-shot-image-classification': 'AutoModelForZeroShotImageClassification',
+    'zero-shot-object-detection': 'AutoModelForZeroShotObjectDetection',
 }
 
 SUPPORTED_MODELS = {
@@ -64,6 +81,32 @@ SUPPORTED_MODELS = {
         'sentence-transformers/all-MiniLM-L12-v2': [
             'default',
         ],
+
+
+        'Davlan/bert-base-multilingual-cased-ner-hrl': [
+            # 'default',
+            'token-classification',
+        ],
+        'ckiplab/bert-base-chinese-ner': [
+            # 'default',
+            'token-classification',
+        ],
+        'ckiplab/bert-base-chinese-ws': [
+            # 'default',
+            'token-classification',
+        ],
+        'ckiplab/bert-base-chinese-pos': [
+            # 'default',
+            'token-classification',
+        ],
+        'dslim/bert-base-NER': [
+            # 'default',
+            'token-classification',
+        ],
+        'dslim/bert-base-NER-uncased': [
+            # 'default',
+            'token-classification',
+        ],
     },
     'blenderbot-small': {
         'facebook/blenderbot_small-90M': [
@@ -105,6 +148,11 @@ SUPPORTED_MODELS = {
             'object-detection',
             # 'image-segmentation',
         ],
+
+        'facebook/detr-resnet-50-panoptic': [
+            'image-segmentation',
+        ],
+        
     },
     'distilbert': {
         'distilbert-base-uncased': [
@@ -129,7 +177,12 @@ SUPPORTED_MODELS = {
         'typeform/distilbert-base-uncased-mnli': [
             'default',
             'sequence-classification',
-        ]
+        ],
+
+        'Davlan/distilbert-base-multilingual-cased-ner-hrl': [
+            # 'default',
+            'token-classification',
+        ],
     },
     'gpt-neo': {
         'EleutherAI/gpt-neo-125M': [
@@ -148,6 +201,13 @@ SUPPORTED_MODELS = {
             'sequence-classification',
             'token-classification',
         ]
+    },
+    'marian': {
+        f'Helsinki-NLP/opus-mt-{x}': [
+            'default',
+            'seq2seq-lm-with-past',
+        ]
+        for x in SUPPORTED_HELSINKI_NLP_MODELS
     },
     'mobilebert': {
         'google/mobilebert-uncased': [
@@ -271,7 +331,7 @@ def main():
         for model_id, tasks in model_ids.items():
             for task in tasks:
                 print(
-                    f'python ./scripts/convert.py --model_id {model_id} --from_hub --quantize --task {task}')
+                    f'python -m scripts.convert --model_id {model_id} --from_hub --quantize --task {task}')
         print()
 
 

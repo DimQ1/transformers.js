@@ -1,8 +1,12 @@
+///////////////////////////////////////////////////////////////
+// Worker.js file for doing all transformer-based computations
+// Needed to ensure the UI thread is not blocked when running
+///////////////////////////////////////////////////////////////
+//
 // Get dist directory relative to location of worker script.
 const DIST_DIR = location.pathname.split('/').slice(0, -1 - 2).join('/') + '/dist/';
 
-// Worker.js file for doing all transformer-based computations
-// Needed to ensure the UI thread is not blocked when running
+// Import transformers.js library
 importScripts(DIST_DIR + 'transformers.min.js');
 
 // Set paths to wasm files. In this case, we use the .wasm files present in `DIST_DIR`.
@@ -19,6 +23,7 @@ const TASK_FUNCTION_MAPPING = {
     'code-completion': code_completion,
     'masked-language-modelling': masked_lm,
     'sequence-classification': sequence_classification,
+    'token-classification': token_classification,
     'zero-shot-classification': zero_shot_classification,
     'question-answering': question_answering,
     'summarization': summarize,
@@ -49,6 +54,8 @@ self.addEventListener('message', async (event) => {
 class PipelineFactory {
     static task = null;
     static model = null;
+
+    // NOTE: instance stores a promise that resolves to the pipeline
     static instance = null;
 
     constructor(tokenizer, model) {
@@ -56,12 +63,12 @@ class PipelineFactory {
         this.model = model;
     }
 
-    static async getInstance(progressCallback = null) {
+    static getInstance(progressCallback = null) {
         if (this.task === null || this.model === null) {
             throw Error("Must set task and model")
         }
         if (this.instance === null) {
-            this.instance = await pipeline(this.task, this.model, {
+            this.instance = pipeline(this.task, this.model, {
                 progress_callback: progressCallback
             });
         }
@@ -93,6 +100,11 @@ class MaskedLMPipelineFactory extends PipelineFactory {
 class SequenceClassificationPipelineFactory extends PipelineFactory {
     static task = 'text-classification';
     static model = 'nlptown/bert-base-multilingual-uncased-sentiment';
+}
+
+class TokenClassificationPipelineFactory extends PipelineFactory {
+    static task = 'token-classification';
+    static model = 'Davlan/bert-base-multilingual-cased-ner-hrl';
 }
 
 class ZeroShotClassificationPipelineFactory extends PipelineFactory {
@@ -265,6 +277,73 @@ async function sequence_classification(data) {
         data: outputs
     });
 }
+
+
+async function token_classification(data) {
+
+    let pipeline = await TokenClassificationPipelineFactory.getInstance(data => {
+        self.postMessage({
+            type: 'download',
+            task: 'token-classification',
+            data: data
+        });
+    });
+
+    let outputs = await pipeline(data.text, {
+        ignore_labels: []   // Return all labels
+    });
+
+    let chunks = [];
+    let currentChunk = { type: '', text: [] };
+
+    for (let i = 0; i < outputs.length; i++) {
+        let word = pipeline.tokenizer.model.tokens_to_ids[outputs[i].word];
+        let entity = outputs[i].entity;
+
+        if (entity.startsWith('B-')) { // beginning of a new chunk
+            if (currentChunk.text.length > 0) { // push the current chunk if it exists
+                chunks.push(currentChunk);
+                currentChunk = { type: '', text: [] };
+            }
+            currentChunk.type = entity.slice(2); // get the type of the chunk
+            currentChunk.text = [word];
+        } else if (entity.startsWith('I-')) { // continuation of a chunk
+            currentChunk.text.push(word);
+        } else { // not part of a chunk (O tag)
+            if (currentChunk.text.length > 0) { // push the current chunk if it exists
+
+                if (currentChunk.type === 'O') {
+                    currentChunk.text.push(word);
+                } else {
+                    chunks.push(currentChunk);
+                    currentChunk = { type: 'O', text: [word] };
+                }
+            } else {
+                currentChunk = { type: 'O', text: [word] };
+            }
+        }
+    }
+
+    // push the last chunk if it exists
+    if (currentChunk.text.length > 0) {
+        chunks.push(currentChunk);
+    }
+
+    let postProcessedChunks = chunks.map(
+        x => ({
+            type: x.type,
+            text: pipeline.tokenizer.decode(x.text)
+        })
+    )
+
+    self.postMessage({
+        type: 'complete',
+        target: data.elementIdToUpdate,
+        targetType: data.targetType,
+        data: postProcessedChunks,
+    });
+}
+
 
 async function zero_shot_classification(data) {
 
