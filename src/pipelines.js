@@ -1,95 +1,115 @@
-const {
-  Callable,
-  softmax,
-  indexOfMax,
-  getTopItems,
-  cos_sim,
-  pathJoin,
-  isString,
-  getFile,
-  dot,
-} = require('./utils.js');
+/**
+ * @file Pipelines provide a high-level, easy to use, API for running machine learning models.
+ * 
+ * **Example:** Instantiate pipeline using the `pipeline` function.
+ * ```javascript
+ * import { pipeline } from '@xenova/transformers';
+ * 
+ * let pipeline = await pipeline('sentiment-analysis');
+ * let result = await pipeline('I love transformers!');
+ * // [{'label': 'POSITIVE', 'score': 0.999817686}]
+ * ```
+ * 
+ * @module pipelines
+ */
 
-const { AudioContext } = require('web-audio-api');
-const pcmUtil = require('pcm-util');
-
-const { AutoTokenizer } = require('./tokenizers.js');
-const { AutoTokenizer } = require('./tokenizers.js');
-const {
-  AutoModel,
-  AutoModelForSequenceClassification,
-  AutoModelForTokenClassification,
-  AutoModelForQuestionAnswering,
-  AutoModelForMaskedLM,
-  AutoModelForSeq2SeqLM,
-  AutoModelForCausalLM,
-  AutoModelForVision2Seq,
-  AutoModelForImageClassification,
-  AutoModelForImageSegmentation,
-  AutoModelForObjectDetection,
-} = require('./models.js');
-const { AutoProcessor, Processor } = require('./processors.js');
+import {
+    AutoTokenizer,
+    PreTrainedTokenizer,
+} from './tokenizers.js';
+import {
+    AutoModel,
+    AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
+    AutoModelForQuestionAnswering,
+    AutoModelForMaskedLM,
+    AutoModelForSeq2SeqLM,
+    AutoModelForCausalLM,
+    AutoModelForVision2Seq,
+    AutoModelForImageClassification,
+    AutoModelForImageSegmentation,
+    AutoModelForObjectDetection,
+    PreTrainedModel,
+} from './models.js';
+import {
+    AutoProcessor,
+    Processor
+} from './processors.js';
 
 const { env } = require('./env.js');
 
-const { Tensor } = require('./tensor_utils.js');
-
-const { Tensor, transpose_data } = require('./tensor_utils.js');
-const { CustomImage } = require('./image_utils.js');
+import {
+    Callable,
+    isString,
+    dispatchCallback,
+} from './utils/core.js';
+import {
+    softmax,
+    max,
+    getTopItems,
+    cos_sim,
+    dot
+} from './utils/maths.js';
+import {
+    read_audio
+} from './utils/audio.js';
+import { Tensor } from './utils/tensor.js';
+import { RawImage } from './utils/image.js';
 
 /**
  * Prepare images for further tasks.
- * @param {any[]} images - images to prepare.
- * @returns {Promise<any[]>} - returns processed images.
- * @async
+ * @param {any[]} images images to prepare.
+ * @returns {Promise<any[]>} returns processed images.
+ * @private
  */
 async function prepareImages(images) {
   if (!Array.isArray(images)) {
     images = [images];
   }
 
-  // Possibly convert any non-images to images
-  images = await Promise.all(images.map((x) => CustomImage.read(x)));
-  return images;
+    // Possibly convert any non-images to images
+    images = await Promise.all(images.map(x => RawImage.read(x)));
+    return images;
 }
 
 /**
- * Pipeline class for executing a natural language processing task.
+ * The Pipeline class is the class from which all pipelines inherit.
+ * Refer to this class for methods shared across different pipelines.
  * @extends Callable
  */
-class Pipeline extends Callable {
-  /**
-   * Creates a new instance of Pipeline.
-   * @param {string} task - The natural language processing task to be performed.
-   * @param {object} tokenizer - The tokenizer object to be used for tokenizing input texts.
-   * @param {object} model - The model object to be used for processing input texts.
-   */
-  constructor(task, tokenizer, model) {
-    super();
-    this.task = task;
-    this.tokenizer = tokenizer;
-    this.model = model;
-  }
+export class Pipeline extends Callable {
+    /**
+     * Create a new Pipeline.
+     * @param {string} task The task of the pipeline. Useful for specifying subtasks.
+     * @param {PreTrainedTokenizer} tokenizer The tokenizer to use.
+     * @param {PreTrainedModel} model The model to use.
+     */
+    constructor(task, tokenizer, model) {
+        super();
+        this.task = task;
+        this.tokenizer = tokenizer;
+        this.model = model;
+    }
 
-  /**
-   * Disposes the model.
-   * @returns {Promise<void>} - A promise that resolves when the model has been disposed.
-   */
-  async dispose() {
-    return await this.model.dispose();
-  }
+    /**
+     * Disposes the model.
+     * @returns {Promise<void>} A promise that resolves when the model has been disposed.
+     */
+    async dispose() {
+        await this.model.dispose();
+    }
 
-  /**
-   * Executes the natural language processing task.
-   * @param {any} texts - The input texts to be processed.
-   * @returns {Promise<any>} - A promise that resolves to an array containing the inputs and outputs of the task.
-   */
-  async _call(texts) {
-    // Run tokenization
-    let inputs = this.tokenizer(texts, {
-      padding: true,
-      truncation: true,
-    });
+    /**
+     * Executes the task associated with the pipeline.
+     * @param {any} texts The input texts to be processed.
+     * @returns {Promise<any>} A promise that resolves to an array containing the inputs and outputs of the task.
+     */
+    async _call(texts) {
+        // Run tokenization
+        let inputs = this.tokenizer(texts, {
+            padding: true,
+            truncation: true
+        });
 
     // Run model
     let outputs = await this.model(inputs);
@@ -99,19 +119,22 @@ class Pipeline extends Callable {
 }
 
 /**
- * TextClassificationPipeline class for executing a text classification task.
+ * Text classification pipeline using any `ModelForSequenceClassification`.
  * @extends Pipeline
  */
-class TextClassificationPipeline extends Pipeline {
-  /**
-   * Executes the text classification task.
-   * @param {any} texts - The input texts to be classified.
-   * @param {object} options - An optional object containing the following properties:
-   * @param {number} [options.topk=1] - The number of top predictions to be returned.
-   * @returns {Promise<object[]|object>} - A promise that resolves to an array or object containing the predicted labels and scores.
-   */
-  async _call(texts, { topk = 1 } = {}) {
-    let [inputs, outputs] = await super._call(texts);
+export class TextClassificationPipeline extends Pipeline {
+    /**
+     * Executes the text classification task.
+     * @param {any} texts The input texts to be classified.
+     * @param {Object} options An optional object containing the following properties:
+     * @param {number} [options.topk=1] The number of top predictions to be returned.
+     * @returns {Promise<Object[]|Object>} A promise that resolves to an array or object containing the predicted labels and scores.
+     */
+    async _call(texts, {
+        topk = 1
+    } = {}) {
+
+        let [inputs, outputs] = await super._call(texts);
 
     let id2label = this.model.config.id2label;
     let toReturn = [];
@@ -136,23 +159,21 @@ class TextClassificationPipeline extends Pipeline {
 }
 
 /**
- * TokenClassificationPipeline class for executing a token classification task.
+ * Named Entity Recognition pipeline using any `ModelForTokenClassification`.
  * @extends Pipeline
  */
-class TokenClassificationPipeline extends Pipeline {
-  /**
-   * Executes the token classification task.
-   * @param {any} texts - The input texts to be classified.
-   * @param {object} options - An optional object containing the following properties:
-   * @returns {Promise<object[]|object>} - A promise that resolves to an array or object containing the predicted labels and scores.
-   */
-  async _call(
-    texts,
-    {
-      ignore_labels = ['O'], // TODO init param?
-    } = {}
-  ) {
-    let isBatched = Array.isArray(texts);
+export class TokenClassificationPipeline extends Pipeline {
+    /**
+     * Executes the token classification task.
+     * @param {any} texts The input texts to be classified.
+     * @param {Object} options An optional object containing the following properties:
+     * @returns {Promise<Object[]|Object>} A promise that resolves to an array or object containing the predicted labels and scores.
+     */
+    async _call(texts, {
+        ignore_labels = ['O'], // TODO init param?
+    } = {}) {
+
+        let isBatched = Array.isArray(texts);
 
     if (!isBatched) {
       texts = [texts];
@@ -164,16 +185,16 @@ class TokenClassificationPipeline extends Pipeline {
     let logits = outputs.logits;
     let id2label = this.model.config.id2label;
 
-    let toReturn = [];
-    for (let i = 0; i < logits.dims[0]; ++i) {
-      let ids = inputs.input_ids.get(i);
-      let batch = logits.get(i);
+        let toReturn = [];
+        for (let i = 0; i < logits.dims[0]; ++i) {
+            let ids = inputs.input_ids[i];
+            let batch = logits[i];
 
-      // List of tokens that aren't ignored
-      let tokens = [];
-      for (let j = 0; j < batch.dims[0]; ++j) {
-        let tokenData = batch.get(j);
-        let topScoreIndex = indexOfMax(tokenData.data);
+            // List of tokens that aren't ignored
+            let tokens = [];
+            for (let j = 0; j < batch.dims[0]; ++j) {
+                let tokenData = batch[j];
+                let topScoreIndex = max(tokenData.data)[1];
 
         let entity = id2label[topScoreIndex];
         if (ignore_labels.includes(entity)) {
@@ -181,14 +202,12 @@ class TokenClassificationPipeline extends Pipeline {
           continue;
         }
 
-        // TODO add option to keep special tokens?
-        let word = tokenizer.decode([ids.get(j)], {
-          skip_special_tokens: true,
-        });
-        if (word === '') {
-          // Was a special token. So, we skip it.
-          continue;
-        }
+                // TODO add option to keep special tokens?
+                let word = tokenizer.decode([ids[j].item()], { skip_special_tokens: true });
+                if (word === '') {
+                    // Was a special token. So, we skip it.
+                    continue;
+                }
 
         let scores = softmax(tokenData.data);
 
@@ -209,37 +228,40 @@ class TokenClassificationPipeline extends Pipeline {
   }
 }
 /**
- * QuestionAnsweringPipeline class for executing a question answering task.
+ * Question Answering pipeline using any `ModelForQuestionAnswering`.
  * @extends Pipeline
  */
-class QuestionAnsweringPipeline extends Pipeline {
-  /**
-   * Executes the question answering task.
-   * @param {string|string[]} question - The question(s) to be answered.
-   * @param {string|string[]} context - The context(s) where the answer(s) can be found.
-   * @param {object} options - An optional object containing the following properties:
-   * @param {number} [options.topk=1] - The number of top answer predictions to be returned.
-   * @todo fix error below
-   * @returns {Promise<any>} - A promise that resolves to an array or object containing the predicted answers and scores.
-   */
-  async _call(question, context, { topk = 1 } = {}) {
-    let inputs = this.tokenizer(question, {
-      text_pair: context,
-    });
+export class QuestionAnsweringPipeline extends Pipeline {
+    /**
+     * Executes the question answering task.
+     * @param {string|string[]} question The question(s) to be answered.
+     * @param {string|string[]} context The context(s) where the answer(s) can be found.
+     * @param {Object} options An optional object containing the following properties:
+     * @param {number} [options.topk=1] The number of top answer predictions to be returned.
+     * @returns {Promise<any>} A promise that resolves to an array or object containing the predicted answers and scores.
+     */
+    // @ts-ignore
+    async _call(question, context, {
+        topk = 1
+    } = {}) {
+
+        let inputs = this.tokenizer(question, {
+            text_pair: context
+        })
 
     let output = await this.model(inputs);
 
-    let toReturn = [];
-    for (let j = 0; j < output.start_logits.dims[0]; ++j) {
-      let ids = inputs.input_ids.get(j);
-      let sepIndex = ids.indexOf(this.tokenizer.sep_token_id);
+        let toReturn = [];
+        for (let j = 0; j < output.start_logits.dims[0]; ++j) {
+            let ids = inputs.input_ids[j];
+            let sepIndex = ids.indexOf(this.tokenizer.sep_token_id);
 
-      let s1 = Array.from(softmax(output.start_logits.get(j).data))
-        .map((x, i) => [x, i])
-        .filter((x) => x[1] > sepIndex);
-      let e1 = Array.from(softmax(output.end_logits.get(j).data))
-        .map((x, i) => [x, i])
-        .filter((x) => x[1] > sepIndex);
+            let s1 = Array.from(softmax(output.start_logits[j].data))
+                .map((x, i) => [x, i])
+                .filter(x => x[1] > sepIndex);
+            let e1 = Array.from(softmax(output.end_logits[j].data))
+                .map((x, i) => [x, i])
+                .filter(x => x[1] > sepIndex);
 
       let options = product(s1, e1)
         .filter((x) => x[0][1] <= x[1][1])
@@ -270,18 +292,22 @@ class QuestionAnsweringPipeline extends Pipeline {
 }
 
 /**
- * Class representing a fill-mask pipeline for natural language processing.
+ * Masked language modeling prediction pipeline using any `ModelWithLMHead`.
  * @extends Pipeline
  */
-class FillMaskPipeline extends Pipeline {
-  /**
-   * @param {any} texts
-   */
-  async _call(texts, { topk = 5 } = {}) {
-    // Fill the masked token in the text(s) given as inputs.
-
-    // Run tokenization
-    let [inputs, outputs] = await super._call(texts);
+export class FillMaskPipeline extends Pipeline {
+    /**
+     * Fill the masked token in the text(s) given as inputs.
+     * @param {any} texts The masked input texts.
+     * @param {Object} options An optional object containing the following properties:
+     * @param {number} [options.topk=5] The number of top predictions to be returned.
+     * @returns {Promise<Object[]|Object>} A promise that resolves to an array or object containing the predicted tokens and scores.
+     */
+    async _call(texts, {
+        topk = 5
+    } = {}) {
+        // Run tokenization
+        let [inputs, outputs] = await super._call(texts);
 
     // Determine indices of mask tokens
     // let mask_token_indices = inputs.input_ids.data.map(x => )
@@ -292,15 +318,15 @@ class FillMaskPipeline extends Pipeline {
 
     let toReturn = [];
 
-    for (let i = 0; i < inputs.input_ids.dims[0]; ++i) {
-      let ids = inputs.input_ids.get(i);
-      let mask_token_index = ids.indexOf(this.tokenizer.mask_token_id);
+        for (let i = 0; i < inputs.input_ids.dims[0]; ++i) {
+            let ids = inputs.input_ids[i];
+            let mask_token_index = ids.indexOf(this.tokenizer.mask_token_id)
 
-      if (mask_token_index === -1) {
-        throw Error(`Mask token (${tokenizer.mask_token}) not found in text.`);
-      }
-      let logits = outputs.logits.get(i);
-      let itemLogits = logits.get(mask_token_index);
+            if (mask_token_index === -1) {
+                throw Error(`Mask token (${tokenizer.mask_token}) not found in text.`)
+            }
+            let logits = outputs.logits[i];
+            let itemLogits = logits[mask_token_index];
 
       let scores = getTopItems(softmax(itemLogits.data), topk);
 
@@ -326,24 +352,23 @@ class FillMaskPipeline extends Pipeline {
  * Text2TextGenerationPipeline class for generating text using a model that performs text-to-text generation tasks.
  * @extends Pipeline
  */
-class Text2TextGenerationPipeline extends Pipeline {
-  _key = null;
+export class Text2TextGenerationPipeline extends Pipeline {
+    _key = null;
 
-  /**
-   * Fill the masked token in the text(s) given as inputs.
-   * @async
-   * @param {string|string[]} texts - The text or array of texts to be processed.
-   * @param {Object} [options={}] - Options for the fill-mask pipeline.
-   * @param {number} [options.topk=5] - The number of top-k predictions to return.
-   * @returns {Promise<any>} An array of objects containing the score, predicted token, predicted token string,
-   * and the sequence with the predicted token filled in, or an array of such arrays (one for each input text).
-   * If only one input text is given, the output will be an array of objects.
-   * @throws {Error} When the mask token is not found in the input text.
-   */
-  async _call(texts, generate_kwargs = {}) {
-    if (!Array.isArray(texts)) {
-      texts = [texts];
-    }
+    /**
+     * Fill the masked token in the text(s) given as inputs.
+     * @param {string|string[]} texts The text or array of texts to be processed.
+     * @param {Object} [options={}] Options for the fill-mask pipeline.
+     * @param {number} [options.topk=5] The number of top-k predictions to return.
+     * @returns {Promise<any>} An array of objects containing the score, predicted token, predicted token string,
+     * and the sequence with the predicted token filled in, or an array of such arrays (one for each input text).
+     * If only one input text is given, the output will be an array of objects.
+     * @throws {Error} When the mask token is not found in the input text.
+     */
+    async _call(texts, generate_kwargs = {}) {
+        if (!Array.isArray(texts)) {
+            texts = [texts];
+        }
 
     // Add global prefix, if present
     if (this.model.config.prefix) {
@@ -361,10 +386,20 @@ class Text2TextGenerationPipeline extends Pipeline {
       // TODO update generation config
     }
 
-    let input_ids = this.tokenizer(texts, {
-      padding: true,
-      truncation: true,
-    }).input_ids;
+        let tokenizer_options = {
+            padding: true,
+            truncation: true,
+        }
+        let input_ids;
+        if (this instanceof TranslationPipeline && '_build_translation_inputs' in this.tokenizer) {
+            // TODO: move to Translation pipeline?
+            // Currently put here to avoid code duplication
+            // @ts-ignore
+            input_ids = this.tokenizer._build_translation_inputs(texts, tokenizer_options, generate_kwargs).input_ids;
+
+        } else {
+            input_ids = this.tokenizer(texts, tokenizer_options).input_ids;
+        }
 
     let outputTokenIds = (
       await this.model.generate(input_ids, generate_kwargs)
@@ -389,35 +424,35 @@ class Text2TextGenerationPipeline extends Pipeline {
  * A pipeline for summarization tasks, inheriting from Text2TextGenerationPipeline.
  * @extends Text2TextGenerationPipeline
  */
-class SummarizationPipeline extends Text2TextGenerationPipeline {
-  _key = 'summary_text';
+export class SummarizationPipeline extends Text2TextGenerationPipeline {
+    _key = 'summary_text';
 }
 
 /**
  * TranslationPipeline class to translate text from one language to another using the provided model and tokenizer.
  * @extends Text2TextGenerationPipeline
  */
-class TranslationPipeline extends Text2TextGenerationPipeline {
-  _key = 'translation_text';
+export class TranslationPipeline extends Text2TextGenerationPipeline {
+    _key = 'translation_text';
 }
 
 /**
- * A pipeline for generating text based on an input prompt.
+ * Language generation pipeline using any `ModelWithLMHead`.
+ * This pipeline predicts the words that will follow a specified text prompt.
  * @extends Pipeline
  */
-class TextGenerationPipeline extends Pipeline {
-  /**
-   * Generates text based on an input prompt.
-   * @async
-   * @param {any} texts - The input prompt or prompts to generate text from.
-   * @param {object} [generate_kwargs={}] - Additional arguments for text generation.
-   * @returns {Promise<any>} - The generated text or texts.
-   */
-  async _call(texts, generate_kwargs = {}) {
-    let stringInput = typeof texts === 'string' || texts instanceof String;
-    if (stringInput) {
-      texts = [texts];
-    }
+export class TextGenerationPipeline extends Pipeline {
+    /**
+     * Generates text based on an input prompt.
+     * @param {any} texts The input prompt or prompts to generate text from.
+     * @param {Object} [generate_kwargs={}] Additional arguments for text generation.
+     * @returns {Promise<any>} The generated text or texts.
+     */
+    async _call(texts, generate_kwargs = {}) {
+        let stringInput = typeof texts === 'string' || texts instanceof String;
+        if (stringInput) {
+            texts = [texts];
+        }
 
     this.tokenizer.padding_side = 'left';
     let inputs = this.tokenizer(texts, {
@@ -460,17 +495,22 @@ class TextGenerationPipeline extends Pipeline {
 }
 
 /**
- * Class representing an Zero Shot Classification Pipeline that should only be used with zero shot classification tasks.
+ * NLI-based zero-shot classification pipeline using a `ModelForSequenceClassification`
+ * trained on NLI (natural language inference) tasks. Equivalent of `text-classification`
+ * pipelines, but these models don't require a hardcoded number of potential classes, they
+ * can be chosen at runtime. It usually means it's slower but it is **much** more flexible.
  * @extends Pipeline
  */
-class ZeroShotClassificationPipeline extends Pipeline {
-  /**
-   * @param {string} task
-   * @param {any} tokenizer
-   * @param {any} model
-   */
-  constructor(task, tokenizer, model) {
-    super(task, tokenizer, model);
+export class ZeroShotClassificationPipeline extends Pipeline {
+
+    /**
+     * Create a new ZeroShotClassificationPipeline.
+     * @param {string} task The task of the pipeline. Useful for specifying subtasks.
+     * @param {PreTrainedTokenizer} tokenizer The tokenizer to use.
+     * @param {PreTrainedModel} model The model to use.
+     */
+    constructor(task, tokenizer, model) {
+        super(task, tokenizer, model);
 
     // Use model config to get label2id mapping
     this.label2id = Object.fromEntries(
@@ -488,26 +528,31 @@ class ZeroShotClassificationPipeline extends Pipeline {
       this.entailment_id = 2;
     }
 
-    this.contradiction_id = this.label2id['contradiction'];
-    if (this.contradiction_id === undefined) {
-      console.warn(
-        "Could not find 'contradiction' in label2id mapping. Using 0 as contradiction_id."
-      );
-      this.contradiction_id = 0;
+        this.contradiction_id = this.label2id['contradiction'];
+        if (this.contradiction_id === undefined) {
+            console.warn("Could not find 'contradiction' in label2id mapping. Using 0 as contradiction_id.");
+            this.contradiction_id = 0;
+        }
     }
-  }
-  /**
-   * @param {any[]} texts
-   * @param {string[]} candidate_labels
-   * @todo fix error below
-   * @return {Promise<*>}
-   */
-  async _call(
-    texts,
-    candidate_labels,
-    { hypothesis_template = 'This example is {}.', multi_label = false } = {}
-  ) {
-    let isBatched = Array.isArray(texts);
+    /**
+     * @param {any[]} texts
+     * @param {string[]} candidate_labels
+     * @param {Object} options Additional options:
+     * @param {string} [options.hypothesis_template="This example is {}."] The template used to turn each
+     * candidate label into an NLI-style hypothesis. The candidate label will replace the {} placeholder.
+     * @param {boolean} [options.multi_label=false] Whether or not multiple candidate labels can be true.
+     * If `false`, the scores are normalized such that the sum of the label likelihoods for each sequence
+     * is 1. If `true`, the labels are considered independent and probabilities are normalized for each
+     * candidate by doing a softmax of the entailment score vs. the contradiction score.
+     * @return {Promise<Object|Object[]>} The prediction(s), as a map (or list of maps) from label to score.
+     */
+    // @ts-ignore
+    async _call(texts, candidate_labels, {
+        hypothesis_template = "This example is {}.",
+        multi_label = false,
+    } = {}) {
+
+        let isBatched = Array.isArray(texts);
 
     if (!isBatched) {
       texts = [texts];
@@ -571,24 +616,26 @@ class ZeroShotClassificationPipeline extends Pipeline {
 }
 
 /**
- * Class representing an Embeddings Pipeline that should only be used with sentence-transformers.
- * If you want to get the raw outputs from the model, use `AutoModel.from_pretrained(...)`.
+ * Feature extraction pipeline using no model head. This pipeline extracts the hidden
+ * states from the base transformer, which can be used as features in downstream tasks.
+ * 
+ * This can be used with `sentence-transformers`. If you want to get the raw outputs
+ * from the model, use `AutoModel.from_pretrained(...)`.
  * @extends Pipeline
+ * 
+ * @todo Make sure this works for other models than `sentence-transformers`.
  */
-class EmbeddingsPipeline extends Pipeline {
-  // Should only be used with sentence-transformers
-  // If you want to get the raw outputs from the model,
-  // use `AutoModel.from_pretrained(...)`
-  /**
-   * Private method to perform mean pooling of the last hidden state followed by a normalization step.
-   * @param {Tensor} last_hidden_state - Tensor of shape [batchSize, seqLength, embedDim]
-   * @param {Tensor} attention_mask - Tensor of shape [batchSize, seqLength]
-   * @returns {Tensor} Returns a new Tensor of shape [batchSize, embedDim].
-   * @private
-   */
-  _mean_pooling(last_hidden_state, attention_mask) {
-    // last_hidden_state: [batchSize, seqLength, embedDim]
-    // attention_mask:    [batchSize, seqLength]
+export class FeatureExtractionPipeline extends Pipeline {
+    /**
+     * Private method to perform mean pooling of the last hidden state followed by a normalization step.
+     * @param {Tensor} last_hidden_state Tensor of shape [batchSize, seqLength, embedDim]
+     * @param {Tensor} attention_mask Tensor of shape [batchSize, seqLength]
+     * @returns {Tensor} Returns a new Tensor of shape [batchSize, embedDim].
+     * @private
+     */
+    _mean_pooling(last_hidden_state, attention_mask) {
+        // last_hidden_state: [batchSize, seqLength, embedDim]
+        // attention_mask:    [batchSize, seqLength]
 
     let shape = [last_hidden_state.dims[0], last_hidden_state.dims[2]];
     let returnedData = new last_hidden_state.data.constructor(
@@ -623,16 +670,16 @@ class EmbeddingsPipeline extends Pipeline {
     return new Tensor(last_hidden_state.type, returnedData, shape);
   }
 
-  /**
-   * Private method to normalize the input tensor along dim=1.
-   * NOTE: only works for tensors of shape [batchSize, embedDim]. Operates in-place.
-   * @param {any} tensor - Tensor of shape [batchSize, embedDim]
-   * @returns {any} Returns the same Tensor object after performing normalization.
-   * @private
-   */
-  _normalize(tensor) {
-    for (let batch of tensor) {
-      let norm = Math.sqrt(batch.data.reduce((a, b) => a + b * b));
+    /**
+     * Private method to normalize the input tensor along dim=1. 
+     * NOTE: only works for tensors of shape [batchSize, embedDim]. Operates in-place.
+     * @param {any} tensor Tensor of shape [batchSize, embedDim]
+     * @returns {any} Returns the same Tensor object after performing normalization.
+     * @private
+     */
+    _normalize(tensor) {
+        for (let batch of tensor) {
+            let norm = Math.sqrt(batch.data.reduce((a, b) => a + b * b, 0))
 
       for (let i = 0; i < batch.data.length; ++i) {
         batch.data[i] /= norm;
@@ -641,13 +688,13 @@ class EmbeddingsPipeline extends Pipeline {
     return tensor;
   }
 
-  /**
-   * Method to perform mean pooling and normalization of the input texts.
-   * @param {string[]} texts - An array of texts to embed.
-   * @returns {Promise<Tensor>} Returns a new Tensor of shape [batchSize, embedDim].
-   */
-  async _call(texts) {
-    let [inputs, outputs] = await super._call(texts);
+    /**
+     * Method to perform mean pooling and normalization of the input texts.
+     * @param {string[]} texts An array of texts to embed.
+     * @returns {Promise<Tensor>} Returns a new Tensor of shape [batchSize, embedDim].
+     */
+    async _call(texts) {
+        let [inputs, outputs] = await super._call(texts);
 
     // Perform mean pooling, followed by a normalization step
     return this._normalize(
@@ -667,112 +714,55 @@ class EmbeddingsPipeline extends Pipeline {
 }
 
 /**
- * A class representing an automatic speech recognition pipeline.
+ * Pipeline that aims at extracting spoken text contained within some audio.
  * @extends Pipeline
  */
-class AutomaticSpeechRecognitionPipeline extends Pipeline {
-  /**
-   * Creates an instance of AutomaticSpeechRecognitionPipeline.
-   * @param {string} task - The type of the task for this pipeline. Currently only "asr" is supported.
-   * @param {object} tokenizer - The tokenizer to be used for pre-processing inputs.
-   * @param {object} model - The model to be used for the task.
-   * @param {object} processor - The processor to be used for pre-processing audio inputs.
-   */
-  constructor(task, tokenizer, model, processor) {
-    super(task, tokenizer, model);
-    this.processor = processor;
-  }
+export class AutomaticSpeechRecognitionPipeline extends Pipeline {
 
-  /**
-   * Preprocesses the input audio for the AutomaticSpeechRecognitionPipeline.
-   * @param {any} audio - The audio to be preprocessed.
-   * @param {number} sampling_rate - The sampling rate of the audio.
-   * @returns {Promise<string | ArrayBuffer>} - A promise that resolves to the preprocessed audio data.
-   * @private
-   */
-  async _preprocess(audio, sampling_rate) {
-    if (isString(audio)) {
-      // Attempting to load from path
-
-      if (typeof AudioContext === 'undefined') {
-        // Running in node or an environment without AudioContext
-        throw Error(
-          'Unable to load audio from path/URL since `AudioContext` is not available in your environment. ' +
-            'As a result, audio data must be passed directly to the processor. ' +
-            'If you are running in node.js, you can use an external library (e.g., https://github.com/audiojs/web-audio-api) to do this.'
-        );
-      }
-      const response = await (await getFile(audio)).arrayBuffer();
-      const audioCTX = new AudioContext({ sampleRate: sampling_rate });
-      const decoded = await new Promise((resolve) =>
-        audioCTX.decodeAudioData(response, (decodedData) => {
-          resolve(decodedData);
-        })
-      );
-
-      // We now replicate HuggingFace's `ffmpeg_read` method:
-      //
-      // When downmixing a stereo audio file to mono using the -ac 1 option in FFmpeg,
-      // the audio signal is summed across both channels to create a single mono channel.
-      // However, if the audio is at full scale (i.e. the highest possible volume level),
-      // the summing of the two channels can cause the audio signal to clip or distort.
-
-      // To prevent this clipping, FFmpeg applies a scaling factor of 1/sqrt(2) (~ 0.707)
-      // to the audio signal before summing the two channels. This scaling factor ensures
-      // that the combined audio signal will not exceed the maximum possible level, even
-      // if both channels are at full scale.
-
-      // After applying this scaling factor, the audio signal from both channels is summed
-      // to create a single mono channel. It's worth noting that this scaling factor is
-      // only applied when downmixing stereo audio to mono using the -ac 1 option in FFmpeg.
-      // If you're using a different downmixing method, or if you're not downmixing the
-      // audio at all, this scaling factor may not be needed.
-      const SCALING_FACTOR = Math.sqrt(2);
-
-      const originalSampleRate = decoded.sampleRate;
-
-      const sampleRateRatio = originalSampleRate / targetSampleRate;
-
-      audioBufferSourceNode.playbackRate.value = sampleRateRatio;
-
-      if (decoded.numberOfChannels == 2) {
-        let left = decoded.getChannelData(0);
-        let right = decoded.getChannelData(1);
-
-        audio = new Float32Array(left.length);
-        for (let i = 0; i < decoded.length; i++) {
-          audio[i] = (SCALING_FACTOR * (left[i] + right[i])) / 2;
-        }
-      } else {
-        let left = decoded.getChannelData(0);
-
-        audio = new Float32Array(decoded.length);
-        for (let i = 0; i < decoded.length; i++) {
-          audio[i] = decoded[i];
-        }
-      }
+    /**
+     * Create a new AutomaticSpeechRecognitionPipeline.
+     * @param {string} task The task of the pipeline. Useful for specifying subtasks.
+     * @param {PreTrainedTokenizer} tokenizer The tokenizer to use.
+     * @param {PreTrainedModel} model The model to use.
+     * @param {Processor} processor The processor to use.
+     */
+    constructor(task, tokenizer, model, processor) {
+        super(task, tokenizer, model);
+        this.processor = processor;
     }
 
-    return audio;
-  }
+    /**
+     * Preprocesses the input audio for the AutomaticSpeechRecognitionPipeline.
+     * @param {any} audio The audio to be preprocessed.
+     * @param {number} sampling_rate The sampling rate of the audio.
+     * @returns {Promise<string | ArrayBuffer>} A promise that resolves to the preprocessed audio data.
+     * @private
+     */
+    async _preprocess(audio, sampling_rate) {
+        if (isString(audio)) {
+            audio = await read_audio(audio, sampling_rate);
+        }
 
-  /**
-   * Asynchronously processes audio and generates text transcription using the model.
-   * @param {Array} audio - The audio to be transcribed. Can be a single Float32Array or an array of Float32Arrays.
-   * @param {Object} [kwargs={}] - Optional arguments.
-   * @param {boolean} [kwargs.return_timestamps] - Whether to return timestamps or not. Default is false.
-   * @param {number} [kwargs.chunk_length_s] - The length of audio chunks to process in seconds. Default is 0 (no chunking).
-   * @param {number} [kwargs.stride_length_s] - The length of overlap between consecutive audio chunks in seconds. If not provided, defaults to chunk_length_s / 6.
-   * @param {function} [kwargs.chunk_callback] - Callback function to be called with each chunk processed.
-   * @param {boolean} [kwargs.force_full_sequences] - Whether to force outputting full sequences or not. Default is false.
-   * @returns {Promise<Object>} A Promise that resolves to an object containing the transcription text and optionally timestamps if return_timestamps is true.
-   */
-  async _call(audio, kwargs = {}) {
-    let return_timestamps = kwargs.return_timestamps ?? false;
-    let chunk_length_s = kwargs.chunk_length_s ?? 0;
-    let stride_length_s = kwargs.stride_length_s ?? null;
-    let chunk_callback = kwargs.chunk_callback ?? null;
-    let force_full_sequences = kwargs.force_full_sequences ?? false;
+        return audio;
+    }
+
+    /**
+     * Asynchronously processes audio and generates text transcription using the model.
+     * @param {Array} audio The audio to be transcribed. Can be a single Float32Array or an array of Float32Arrays.
+     * @param {Object} [kwargs={}] Optional arguments.
+     * @param {boolean} [kwargs.return_timestamps] Whether to return timestamps or not. Default is false.
+     * @param {number} [kwargs.chunk_length_s] The length of audio chunks to process in seconds. Default is 0 (no chunking).
+     * @param {number} [kwargs.stride_length_s] The length of overlap between consecutive audio chunks in seconds. If not provided, defaults to chunk_length_s / 6.
+     * @param {function} [kwargs.chunk_callback] Callback function to be called with each chunk processed.
+     * @param {boolean} [kwargs.force_full_sequences] Whether to force outputting full sequences or not. Default is false.
+     * @returns {Promise<Object>} A Promise that resolves to an object containing the transcription text and optionally timestamps if return_timestamps is true.
+     */
+    async _call(audio, kwargs = {}) {
+        let return_timestamps = kwargs.return_timestamps ?? false;
+        let chunk_length_s = kwargs.chunk_length_s ?? 0;
+        let stride_length_s = kwargs.stride_length_s ?? null;
+        let chunk_callback = kwargs.chunk_callback ?? null;
+        let force_full_sequences = kwargs.force_full_sequences ?? false;
 
     // TODO
     // task = 'transcribe',
@@ -851,12 +841,13 @@ class AutomaticSpeechRecognitionPipeline extends Pipeline {
         }
       }
 
-      // Merge text chunks
-      let [full_text, optional] = this.tokenizer._decode_asr(chunks, {
-        time_precision: time_precision,
-        return_timestamps: return_timestamps,
-        force_full_sequences: force_full_sequences,
-      });
+            // Merge text chunks
+            // @ts-ignore
+            let [full_text, optional] = this.tokenizer._decode_asr(chunks, {
+                time_precision: time_precision,
+                return_timestamps: return_timestamps,
+                force_full_sequences: force_full_sequences
+            });
 
       toReturn.push({ text: full_text, ...optional });
     }
@@ -865,31 +856,34 @@ class AutomaticSpeechRecognitionPipeline extends Pipeline {
 }
 
 /**
- * A pipeline for performing image-to-text tasks.
+ * Image To Text pipeline using a `AutoModelForVision2Seq`. This pipeline predicts a caption for a given image.
  * @extends Pipeline
  */
-class ImageToTextPipeline extends Pipeline {
-  /**
-   * Create an instance of ImageToTextPipeline.
-   * @param {string} task - The task name.
-   * @param {object} tokenizer - The tokenizer to use.
-   * @param {object} model - The generator model to use.
-   * @param {object} processor - The image processor to use.
-   */
-  constructor(task, tokenizer, model, processor) {
-    super(task, tokenizer, model);
-    this.processor = processor;
-  }
+export class ImageToTextPipeline extends Pipeline {
+    /**
+     * Create a new ImageToTextPipeline.
+     * @param {string} task The task of the pipeline. Useful for specifying subtasks.
+     * @param {PreTrainedTokenizer} tokenizer The tokenizer to use.
+     * @param {PreTrainedModel} model The model to use.
+     * @param {Processor} processor The processor to use.
+     */
+    constructor(task, tokenizer, model, processor) {
+        super(task, tokenizer, model);
+        this.processor = processor;
+    }
 
-  /**
-   * @param {any[]} images
-   */
-  async _call(images, generate_kwargs = {}) {
-    let isBatched = Array.isArray(images);
+    /**
+     * Assign labels to the image(s) passed as inputs.
+     * @param {any[]} images The images to be captioned.
+     * @param {Object} [generate_kwargs={}] Optional generation arguments.
+     * @returns {Promise<Object|Object[]>} A Promise that resolves to an object (or array of objects) containing the generated text(s).
+     */
+    async _call(images, generate_kwargs = {}) {
+        let isBatched = Array.isArray(images);
 
     images = await prepareImages(images);
 
-    let pixel_values = (await this.processor(images)).pixel_values;
+        let { pixel_values } = await this.processor(images);
 
     let toReturn = [];
     for (let batch of pixel_values) {
@@ -910,35 +904,37 @@ class ImageToTextPipeline extends Pipeline {
 }
 
 /**
- * A class representing an image classification pipeline.
+ * Image classification pipeline using any `AutoModelForImageClassification`.
+ * This pipeline predicts the class of an image.
  * @extends Pipeline
  */
-class ImageClassificationPipeline extends Pipeline {
-  /**
-   * Create a new ImageClassificationPipeline.
-   * @param {string} task - The task of the pipeline.
-   * @param {Object} model - The model to use for classification.
-   * @param {Function} processor - The function to preprocess images.
-   */
-  constructor(task, model, processor) {
-    super(task, null, model); // TODO tokenizer
-    this.processor = processor;
-  }
+export class ImageClassificationPipeline extends Pipeline {
+    /**
+     * Create a new ImageClassificationPipeline.
+     * @param {string} task The task of the pipeline. Useful for specifying subtasks.
+     * @param {PreTrainedModel} model The model to use.
+     * @param {Processor} processor The processor to use.
+     */
+    constructor(task, model, processor) {
+        super(task, null, model); // TODO tokenizer
+        this.processor = processor;
+    }
 
-  /**
-   * Classify the given images.
-   * @async
-   * @param {any} images - The images to classify.
-   * @param {Object} options - The options to use for classification.
-   * @param {number} [options.topk=1] - The number of top results to return.
-   * @returns {Promise<any>} - The top classification results for the images.
-   */
-  async _call(images, { topk = 1 } = {}) {
-    let isBatched = Array.isArray(images);
-    images = await prepareImages(images);
+    /**
+     * Classify the given images.
+     * @param {any} images The images to classify.
+     * @param {Object} options The options to use for classification.
+     * @param {number} [options.topk=1] The number of top results to return.
+     * @returns {Promise<any>} The top classification results for the images.
+     */
+    async _call(images, {
+        topk = 1
+    } = {}) {
+        let isBatched = Array.isArray(images);
+        images = await prepareImages(images);
 
-    let inputs = await this.processor(images);
-    let output = await this.model(inputs);
+        let { pixel_values } = await this.processor(images);
+        let output = await this.model({ pixel_values });
 
     let id2label = this.model.config.id2label;
     let toReturn = [];
@@ -963,19 +959,20 @@ class ImageClassificationPipeline extends Pipeline {
 }
 
 /**
- * ImageSegmentationPipeline class for executing an image-segmentation task.
+ * Image segmentation pipeline using any `AutoModelForXXXSegmentation`.
+ * This pipeline predicts masks of objects and their classes.
  * @extends Pipeline
  */
-class ImageSegmentationPipeline extends Pipeline {
-  /**
-   * Create a new ImageSegmentationPipeline.
-   * @param {string} task - The task of the pipeline.
-   * @param {Object} model - The model to use for classification.
-   * @param {Processor} processor - The function to preprocess images.
-   */
-  constructor(task, model, processor) {
-    super(task, null, model); // TODO tokenizer
-    this.processor = processor;
+export class ImageSegmentationPipeline extends Pipeline {
+    /**
+     * Create a new ImageSegmentationPipeline.
+     * @param {string} task The task of the pipeline. Useful for specifying subtasks.
+     * @param {PreTrainedModel} model The model to use.
+     * @param {Processor} processor The processor to use.
+     */
+    constructor(task, model, processor) {
+        super(task, null, model); // TODO tokenizer
+        this.processor = processor;
 
     this.subtasks_mapping = {
       // Mapping of subtasks to their corresponding post-processing function names.
@@ -985,30 +982,27 @@ class ImageSegmentationPipeline extends Pipeline {
     };
   }
 
-  /**
-   * Segment the input images.
-   * @param {Array} images - The input images.
-   * @param {Object} options - The options to use for segmentation.
-   * @param {number} [options.threshold=0.5] - Probability threshold to filter out predicted masks.
-   * @param {number} [options.mask_threshold=0.5] - Threshold to use when turning the predicted masks into binary values.
-   * @param {number} [options.overlap_mask_area_threshold=0.8] - Mask overlap threshold to eliminate small, disconnected segments.
-   * @param {null|string} [options.subtask=null] - Segmentation task to be performed. One of [`panoptic`, `instance`, and `semantic`], depending on model capabilities. If not set, the pipeline will attempt to resolve (in that order).
-   * @param {Array} [options.label_ids_to_fuse=null] - List of label ids to fuse. If not set, do not fuse any labels.
-   * @param {Array} [options.target_sizes=null] - List of target sizes for the input images. If not set, use the original image sizes.
-   * @returns {Promise<Array>} - The annotated segments.
-   */
-  async _call(
-    images,
-    {
-      threshold = 0.5,
-      mask_threshold = 0.5,
-      overlap_mask_area_threshold = 0.8,
-      label_ids_to_fuse = null,
-      target_sizes = null,
-      subtask = null, // TODO use
-    } = {}
-  ) {
-    let isBatched = Array.isArray(images);
+    /**
+     * Segment the input images.
+     * @param {Array} images The input images.
+     * @param {Object} options The options to use for segmentation.
+     * @param {number} [options.threshold=0.5] Probability threshold to filter out predicted masks.
+     * @param {number} [options.mask_threshold=0.5] Threshold to use when turning the predicted masks into binary values.
+     * @param {number} [options.overlap_mask_area_threshold=0.8] Mask overlap threshold to eliminate small, disconnected segments.
+     * @param {null|string} [options.subtask=null] Segmentation task to be performed. One of [`panoptic`, `instance`, and `semantic`], depending on model capabilities. If not set, the pipeline will attempt to resolve (in that order).
+     * @param {Array} [options.label_ids_to_fuse=null] List of label ids to fuse. If not set, do not fuse any labels.
+     * @param {Array} [options.target_sizes=null] List of target sizes for the input images. If not set, use the original image sizes.
+     * @returns {Promise<Array>} The annotated segments.
+     */
+    async _call(images, {
+        threshold = 0.5,
+        mask_threshold = 0.5,
+        overlap_mask_area_threshold = 0.8,
+        label_ids_to_fuse = null,
+        target_sizes = null,
+        subtask = null, // TODO use
+    } = {}) {
+        let isBatched = Array.isArray(images);
 
     if (isBatched && images.length !== 1) {
       throw Error(
@@ -1019,8 +1013,8 @@ class ImageSegmentationPipeline extends Pipeline {
     images = await prepareImages(images);
     let imageSizes = images.map((x) => [x.height, x.width]);
 
-    let inputs = await this.processor(images);
-    let output = await this.model(inputs);
+        let { pixel_values, pixel_mask} = await this.processor(images);
+        let output = await this.model({ pixel_values, pixel_mask});
 
     let fn = null;
     if (subtask !== null) {
@@ -1061,12 +1055,7 @@ class ImageSegmentationPipeline extends Pipeline {
           }
         }
 
-        let mask = new CustomImage(
-          maskData,
-          segmentation.dims[1],
-          segmentation.dims[0],
-          1
-        );
+                let mask = new RawImage(maskData, segmentation.dims[1], segmentation.dims[0], 1)
 
         annotation.push({
           score: segment.score,
@@ -1085,38 +1074,38 @@ class ImageSegmentationPipeline extends Pipeline {
 }
 
 /**
- * Class representing a zero-shot image classification pipeline.
+ * Zero shot image classification pipeline. This pipeline predicts the class of
+ * an image when you provide an image and a set of `candidate_labels`.
  * @extends Pipeline
  */
-class ZeroShotImageClassificationPipeline extends Pipeline {
-  /**
-   * Create a zero-shot image classification pipeline.
-   * @param {string} task - The task of the pipeline.
-   * @param {Object} tokenizer - The tokenizer to use.
-   * @param {Object} model - The model to use.
-   * @param {Function} processor - The image processing function.
-   */
-  constructor(task, tokenizer, model, processor) {
-    super(task, tokenizer, model);
-    this.processor = processor;
-  }
+export class ZeroShotImageClassificationPipeline extends Pipeline {
 
-  /**
-   * Classify the input images with candidate labels using a zero-shot approach.
-   * @param {Array} images - The input images.
-   * @param {Array} candidate_labels - The candidate labels.
-   * @param {Object} options - The options for the classification.
-   * @param {string} [options.hypothesis_template] - The hypothesis template to use for zero-shot classification. Default: "This is a photo of {}".
-   * @todo fix error below
-   * @returns {Promise<any>} An array of classifications for each input image or a single classification object if only one input image is provided.
-   */
-  async _call(
-    images,
-    candidate_labels,
-    { hypothesis_template = 'This is a photo of {}' } = {}
-  ) {
-    let isBatched = Array.isArray(images);
-    images = await prepareImages(images);
+    /**
+     * Create a new ZeroShotImageClassificationPipeline.
+     * @param {string} task The task of the pipeline. Useful for specifying subtasks.
+     * @param {PreTrainedTokenizer} tokenizer The tokenizer to use.
+     * @param {PreTrainedModel} model The model to use.
+     * @param {Processor} processor The processor to use.
+     */
+    constructor(task, tokenizer, model, processor) {
+        super(task, tokenizer, model);
+        this.processor = processor;
+    }
+
+    /**
+     * Classify the input images with candidate labels using a zero-shot approach.
+     * @param {Array} images The input images.
+     * @param {Array} candidate_labels The candidate labels.
+     * @param {Object} options The options for the classification.
+     * @param {string} [options.hypothesis_template] The hypothesis template to use for zero-shot classification. Default: "This is a photo of {}".
+     * @returns {Promise<any>} An array of classifications for each input image or a single classification object if only one input image is provided.
+     */
+    // @ts-ignore
+    async _call(images, candidate_labels, {
+        hypothesis_template = "This is a photo of {}"
+    } = {}) {
+        let isBatched = Array.isArray(images);
+        images = await prepareImages(images);
 
     // Insert label into hypothesis template
     let texts = candidate_labels.map((x) =>
@@ -1129,14 +1118,17 @@ class ZeroShotImageClassificationPipeline extends Pipeline {
       truncation: true,
     });
 
-    // Compare each image with each candidate label
-    let image_inputs = await this.processor(images);
-    let output = await this.model({ ...text_inputs, ...image_inputs });
+        // Run processor
+        let { pixel_values } = await this.processor(images);
 
-    let toReturn = [];
-    for (let batch of output.logits_per_image) {
-      // Compute softmax per image
-      let probs = softmax(batch.data);
+        // Run model with both text and pixel inputs
+        let output = await this.model({ ...text_inputs, pixel_values });
+
+        // Compare each image with each candidate label
+        let toReturn = [];
+        for (let batch of output.logits_per_image) {
+            // Compute softmax per image
+            let probs = softmax(batch.data);
 
       toReturn.push(
         [...probs].map((x, i) => {
@@ -1152,28 +1144,35 @@ class ZeroShotImageClassificationPipeline extends Pipeline {
   }
 }
 
-class ObjectDetectionPipeline extends Pipeline {
-  /**
-   * @param {string} task
-   * @param {any} model
-   * @param {any} processor
-   */
-  constructor(task, model, processor) {
-    super(task, null, model); // TODO tokenizer
-    this.processor = processor;
-  }
+/**
+ * Object detection pipeline using any `AutoModelForObjectDetection`.
+ * This pipeline predicts bounding boxes of objects and their classes.
+ * @extends Pipeline
+ */
+export class ObjectDetectionPipeline extends Pipeline {
+    /**
+     * Create a new ObjectDetectionPipeline.
+     * @param {string} task The task of the pipeline. Useful for specifying subtasks.
+     * @param {PreTrainedModel} model The model to use.
+     * @param {Processor} processor The processor to use.
+     */
+    constructor(task, model, processor) {
+        super(task, null, model); // TODO tokenizer
+        this.processor = processor;
+    }
 
-  /**
-   * @param {any[]} images
-   */
-  async _call(
-    images,
-    {
-      threshold = 0.5,
-      percentage = false, // get in percentage (true) or in pixels (false)
-    } = {}
-  ) {
-    let isBatched = Array.isArray(images);
+    /**
+     * Detect objects (bounding boxes & classes) in the image(s) passed as inputs.
+     * @param {any[]} images The input images.
+     * @param {Object} options The options for the object detection.
+     * @param {number} [options.threshold=0.9] The threshold used to filter boxes by score.
+     * @param {boolean} [options.percentage=false] Whether to return the boxes coordinates in percentage (true) or in pixels (false).
+     */
+    async _call(images, {
+        threshold = 0.9,
+        percentage = false,
+    } = {}) {
+        let isBatched = Array.isArray(images);
 
     if (isBatched && images.length !== 1) {
       throw Error(
@@ -1184,15 +1183,11 @@ class ObjectDetectionPipeline extends Pipeline {
 
     let imageSizes = percentage ? null : images.map((x) => [x.height, x.width]);
 
-    let inputs = await this.processor(images);
-    let output = await this.model(inputs);
+        let { pixel_values, pixel_mask } = await this.processor(images);
+        let output = await this.model({ pixel_values, pixel_mask });
 
-    let processed =
-      this.processor.feature_extractor.post_process_object_detection(
-        output,
-        threshold,
-        imageSizes
-      );
+        // @ts-ignore
+        let processed = this.processor.feature_extractor.post_process_object_detection(output, threshold, imageSizes);
 
     // Add labels
     let id2label = this.model.config.id2label;
@@ -1203,212 +1198,236 @@ class ObjectDetectionPipeline extends Pipeline {
 }
 
 const SUPPORTED_TASKS = {
-  'text-classification': {
-    tokenizer: AutoTokenizer,
-    pipeline: TextClassificationPipeline,
-    model: AutoModelForSequenceClassification,
-    default: {
-      model: 'distilbert-base-uncased-finetuned-sst-2-english',
+    "text-classification": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": TextClassificationPipeline,
+        "model": AutoModelForSequenceClassification,
+        "default": {
+            // TODO: replace with original
+            // "model": "distilbert-base-uncased-finetuned-sst-2-english",
+            "model": "Xenova/distilbert-base-uncased-finetuned-sst-2-english",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
-  'token-classification': {
-    tokenizer: AutoTokenizer,
-    pipeline: TokenClassificationPipeline,
-    model: AutoModelForTokenClassification,
-    default: {
-      model: 'Davlan/bert-base-multilingual-cased-ner-hrl',
+    "token-classification": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": TokenClassificationPipeline,
+        "model": AutoModelForTokenClassification,
+        "default": {
+            // TODO: replace with original
+            // "model": "Davlan/bert-base-multilingual-cased-ner-hrl",
+            "model": "Xenova/bert-base-multilingual-cased-ner-hrl",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
-  'question-answering': {
-    tokenizer: AutoTokenizer,
-    pipeline: QuestionAnsweringPipeline,
-    model: AutoModelForQuestionAnswering,
-    default: {
-      model: 'distilbert-base-cased-distilled-squad',
+    "question-answering": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": QuestionAnsweringPipeline,
+        "model": AutoModelForQuestionAnswering,
+        "default": {
+            // TODO: replace with original
+            // "model": "distilbert-base-cased-distilled-squad",
+            "model": "Xenova/distilbert-base-cased-distilled-squad",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
 
-  'fill-mask': {
-    tokenizer: AutoTokenizer,
-    pipeline: FillMaskPipeline,
-    model: AutoModelForMaskedLM,
-    default: {
-      model: 'bert-base-uncased',
+    "fill-mask": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": FillMaskPipeline,
+        "model": AutoModelForMaskedLM,
+        "default": {
+            // TODO: replace with original
+            // "model": "bert-base-uncased",
+            "model": "Xenova/bert-base-uncased",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
-  summarization: {
-    tokenizer: AutoTokenizer,
-    pipeline: SummarizationPipeline,
-    model: AutoModelForSeq2SeqLM,
-    default: {
-      model: 'sshleifer/distilbart-cnn-6-6',
+    "summarization": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": SummarizationPipeline,
+        "model": AutoModelForSeq2SeqLM,
+        "default": {
+            // TODO: replace with original
+            // "model": "sshleifer/distilbart-cnn-6-6",
+            "model": "Xenova/distilbart-cnn-6-6",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
-  translation: {
-    tokenizer: AutoTokenizer,
-    pipeline: TranslationPipeline,
-    model: AutoModelForSeq2SeqLM,
-    default: {
-      model: 't5-small',
+    "translation": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": TranslationPipeline,
+        "model": AutoModelForSeq2SeqLM,
+        "default": {
+            // TODO: replace with original
+            // "model": "t5-small",
+            "model": "Xenova/t5-small",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
-  'text2text-generation': {
-    tokenizer: AutoTokenizer,
-    pipeline: Text2TextGenerationPipeline,
-    model: AutoModelForSeq2SeqLM,
-    default: {
-      model: 'google/flan-t5-small',
+    "text2text-generation": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": Text2TextGenerationPipeline,
+        "model": AutoModelForSeq2SeqLM,
+        "default": {
+            // TODO: replace with original
+            // "model": "google/flan-t5-small",
+            "model": "Xenova/flan-t5-small",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
-  'text-generation': {
-    tokenizer: AutoTokenizer,
-    pipeline: TextGenerationPipeline,
-    model: AutoModelForCausalLM,
-    default: {
-      model: 'gpt2',
+    "text-generation": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": TextGenerationPipeline,
+        "model": AutoModelForCausalLM,
+        "default": {
+            // TODO: replace with original
+            // "model": "gpt2",
+            "model": "Xenova/gpt2",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
-  'zero-shot-classification': {
-    tokenizer: AutoTokenizer,
-    pipeline: ZeroShotClassificationPipeline,
-    model: AutoModelForSequenceClassification,
-    default: {
-      model: 'typeform/distilbert-base-uncased-mnli',
+    "zero-shot-classification": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": ZeroShotClassificationPipeline,
+        "model": AutoModelForSequenceClassification,
+        "default": {
+            // TODO: replace with original
+            // "model": "typeform/distilbert-base-uncased-mnli",
+            "model": "Xenova/distilbert-base-uncased-mnli",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
 
-  'automatic-speech-recognition': {
-    tokenizer: AutoTokenizer,
-    pipeline: AutomaticSpeechRecognitionPipeline,
-    model: AutoModelForSeq2SeqLM,
-    processor: AutoProcessor,
-    default: {
-      model: 'openai/whisper-tiny.en',
+    "automatic-speech-recognition": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": AutomaticSpeechRecognitionPipeline,
+        "model": AutoModelForSeq2SeqLM,
+        "processor": AutoProcessor,
+        "default": {
+            // TODO: replace with original
+            // "model": "openai/whisper-tiny.en",
+            "model": "Xenova/whisper-tiny.en",
+        },
+        "type": "multimodal",
     },
-    type: 'multimodal',
-  },
 
-  'image-to-text': {
-    tokenizer: AutoTokenizer,
-    pipeline: ImageToTextPipeline,
-    model: AutoModelForVision2Seq,
-    processor: AutoProcessor,
-    default: {
-      model: 'nlpconnect/vit-gpt2-image-captioning',
+    "image-to-text": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": ImageToTextPipeline,
+        "model": AutoModelForVision2Seq,
+        "processor": AutoProcessor,
+        "default": {
+            // TODO: replace with original
+            // "model": "nlpconnect/vit-gpt2-image-captioning",
+            "model": "Xenova/vit-gpt2-image-captioning",
+        },
+        "type": "multimodal",
     },
-    type: 'multimodal',
-  },
 
-  'image-classification': {
-    // no tokenizer
-    pipeline: ImageClassificationPipeline,
-    model: AutoModelForImageClassification,
-    processor: AutoProcessor,
-    default: {
-      model: 'google/vit-base-patch16-224',
+    "image-classification": {
+        // no tokenizer
+        "pipeline": ImageClassificationPipeline,
+        "model": AutoModelForImageClassification,
+        "processor": AutoProcessor,
+        "default": {
+            // TODO: replace with original
+            // "model": "google/vit-base-patch16-224",
+            "model": "Xenova/vit-base-patch16-224",
+        },
+        "type": "multimodal",
     },
-    type: 'multimodal',
-  },
 
-  'image-segmentation': {
-    // no tokenizer
-    pipeline: ImageSegmentationPipeline,
-    model: AutoModelForImageSegmentation,
-    processor: AutoProcessor,
-    default: {
-      model: 'facebook/detr-resnet-50-panoptic',
+    "image-segmentation": {
+        // no tokenizer
+        "pipeline": ImageSegmentationPipeline,
+        "model": AutoModelForImageSegmentation,
+        "processor": AutoProcessor,
+        "default": {
+            // TODO: replace with original
+            // "model": "facebook/detr-resnet-50-panoptic",
+            "model": "Xenova/detr-resnet-50-panoptic",
+        },
+        "type": "multimodal",
     },
-    type: 'multimodal',
-  },
 
-  'zero-shot-image-classification': {
-    // no tokenizer
-    tokenizer: AutoTokenizer,
-    pipeline: ZeroShotImageClassificationPipeline,
-    model: AutoModel,
-    processor: AutoProcessor,
-    default: {
-      model: 'openai/clip-vit-base-patch32',
+    "zero-shot-image-classification": {
+        // no tokenizer
+        "tokenizer": AutoTokenizer,
+        "pipeline": ZeroShotImageClassificationPipeline,
+        "model": AutoModel,
+        "processor": AutoProcessor,
+        "default": {
+            // TODO: replace with original
+            // "model": "openai/clip-vit-base-patch32",
+            "model": "Xenova/clip-vit-base-patch32",
+        },
+        "type": "multimodal",
     },
-    type: 'multimodal',
-  },
 
-  'object-detection': {
-    // no tokenizer
-    pipeline: ObjectDetectionPipeline,
-    model: AutoModelForObjectDetection,
-    processor: AutoProcessor,
-    default: {
-      model: 'facebook/detr-resnet-50',
+    "object-detection": {
+        // no tokenizer
+        "pipeline": ObjectDetectionPipeline,
+        "model": AutoModelForObjectDetection,
+        "processor": AutoProcessor,
+        "default": {
+            // TODO: replace with original
+            // "model": "facebook/detr-resnet-50",
+            "model": "Xenova/detr-resnet-50",
+        },
+        "type": "multimodal",
     },
-    type: 'multimodal',
-  },
 
-  // This task is not supported in HuggingFace transformers, but serves as a useful interface
-  // for dealing with sentence-transformers (https://huggingface.co/sentence-transformers)
-  embeddings: {
-    tokenizer: AutoTokenizer,
-    pipeline: EmbeddingsPipeline,
-    model: AutoModel,
-    default: {
-      model: 'sentence-transformers/all-MiniLM-L6-v2',
+    // This task serves as a useful interface for dealing with sentence-transformers (https://huggingface.co/sentence-transformers).
+    "feature-extraction": {
+        "tokenizer": AutoTokenizer,
+        "pipeline": FeatureExtractionPipeline,
+        "model": AutoModel,
+        "default": {
+            // TODO: replace with original
+            // "model": "sentence-transformers/all-MiniLM-L6-v2",
+            "model": "Xenova/all-MiniLM-L6-v2",
+        },
+        "type": "text",
     },
-    type: 'text',
-  },
-};
+}
 
-const TASK_NAME_MAPPING = {
-  // Fix mismatch between pipeline's task name and exports (folder name)
-  'text-classification': 'sequence-classification',
-  embeddings: 'default',
-  'fill-mask': 'masked-lm',
-
-  'text2text-generation': 'seq2seq-lm-with-past',
-  summarization: 'seq2seq-lm-with-past',
-  'text-generation': 'causal-lm-with-past',
-
-  'automatic-speech-recognition': 'speech2seq-lm-with-past',
-  'image-to-text': 'vision2seq-lm-with-past',
-
-  'zero-shot-image-classification': 'default',
-  'zero-shot-classification': 'sequence-classification',
-};
-
-const TASK_PREFIX_MAPPING = {
-  // if task starts with one of these, set the corresponding folder name
-  translation: 'seq2seq-lm-with-past',
-};
 
 const TASK_ALIASES = {
-  'sentiment-analysis': 'text-classification',
-  ner: 'token-classification',
-  vqa: 'visual-question-answering',
-};
+    "sentiment-analysis": "text-classification",
+    "ner": "token-classification",
+    "vqa": "visual-question-answering",
+
+    // Add for backwards compatibility
+    "embeddings": "feature-extraction",
+}
 
 /**
- * Constructs a pipeline for a specified task with optional model and progress callback.
+ * @typedef {import('./utils/hub.js').PretrainedOptions} PretrainedOptions
+ */
+
+/**
+ * Utility factory method to build a [`Pipeline`] object.
  *
- * @async
- * @function
- * @param {string} task - The task to perform, e.g. "text-generation".
- * @param {string} [model=null] - The name of the pre-trained model to use. If not specified, the default model for the task will be used.
- * @param {object} [options] - Optional parameters for the pipeline.
- * @param {function} [options.progress_callback=null] - A function to call with progress updates.
+ * @param {string} task The task of the pipeline.
+ * @param {string} [model=null] The name of the pre-trained model to use. If not specified, the default model for the task will be used.
+ * @param {PretrainedOptions} [options] Optional parameters for the pipeline.
  * @returns {Promise<Pipeline>} A Pipeline object for the specified task.
- * @todo fix error below
  * @throws {Error} If an unsupported pipeline is requested.
  */
-async function pipeline(task, model = null, { progress_callback = null } = {}) {
-  // Helper method to construct pipeline
+export async function pipeline(
+    task,
+    model = null,
+    {
+        quantized = true,
+        progress_callback = null,
+        config = null,
+        cache_dir = null,
+        local_files_only = false,
+        revision = 'main',
+    } = {}
+) {
+    // Helper method to construct pipeline
 
   // Apply aliases
   task = TASK_ALIASES[task] ?? task;
@@ -1423,71 +1442,66 @@ async function pipeline(task, model = null, { progress_callback = null } = {}) {
     );
   }
 
-  // Use model if specified, otherwise, use default
-  if (!model) {
-    model = pipelineInfo.default.model;
-    console.log(`No model specified. Using default model: "${model}".`);
-  }
-
-  // determine suffix
-  let suffix = TASK_NAME_MAPPING[task];
-  if (!suffix) {
-    // try get from suffix
-    for (const [prefix, mapping] of Object.entries(TASK_PREFIX_MAPPING)) {
-      if (task.startsWith(prefix)) {
-        suffix = mapping;
-        break;
-      }
+    // Use model if specified, otherwise, use default
+    if (!model) {
+        model = pipelineInfo.default.model
+        console.log(`No model specified. Using default model: "${model}".`);
     }
-  }
 
-  if (!suffix) {
-    // Still not set... so, we default to the name given
-    suffix = task;
-  }
-
-  // Construct model path
-  model = pathJoin(
-    env.remoteModels ? env.remoteURL : env.localURL, // host prefix
-    model, // model name
-    suffix // task suffix
-  );
-
-  let tokenizerClass = pipelineInfo.tokenizer;
-  let modelClass = pipelineInfo.model;
-  let pipelineClass = pipelineInfo.pipeline;
-  let processorClass = pipelineInfo.processor;
+    let tokenizerClass = pipelineInfo.tokenizer;
+    let modelClass = pipelineInfo.model;
+    let pipelineClass = pipelineInfo.pipeline;
+    let processorClass = pipelineInfo.processor;
 
   let promises = [];
 
-  if (tokenizerClass) {
-    promises.push(AutoTokenizer.from_pretrained(model, progress_callback));
-  }
-  if (modelClass) {
-    promises.push(modelClass.from_pretrained(model, progress_callback));
-  }
+    let pretrainedOptions = {
+        quantized,
+        progress_callback,
+        config,
+        cache_dir,
+        local_files_only,
+        revision,
+    }
+    if (tokenizerClass) {
+        promises.push(
+            tokenizerClass.from_pretrained(model, pretrainedOptions),
+        )
+    }
+    if (modelClass) {
+        promises.push(
+            modelClass.from_pretrained(model, pretrainedOptions)
+        )
+    }
 
-  if (processorClass) {
-    promises.push(processorClass.from_pretrained(model, progress_callback));
-  }
+    if (processorClass) {
+        promises.push(
+            processorClass.from_pretrained(model, pretrainedOptions)
+        )
+    }
 
-  // Load tokenizer and model
-  let items = await Promise.all(promises);
-  // TODO: fix error below
-  return new pipelineClass(task, ...items);
+    // Load tokenizer and model
+    let items = await Promise.all(promises)
+    // TODO: fix error below
+
+    dispatchCallback(progress_callback, {
+        'status': 'ready',
+        'task': task,
+        'model': model,
+    });
+
+    return new pipelineClass(task, ...items);
+
 }
 
 /**
  * Compute the Cartesian product of given arrays
- * @param {...Array} a - Arrays to compute the product
- * @returns {Array} - Returns the computed Cartesian product as an array
+ * @param {...Array} a Arrays to compute the product
+ * @returns {Array} Returns the computed Cartesian product as an array
+ * @private
  */
 function product(...a) {
   // Cartesian product of items
   // Adapted from https://stackoverflow.com/a/43053803
   return a.reduce((a, b) => a.flatMap((d) => b.map((e) => [d, e])));
 }
-
-module.exports = {
-  pipeline,
-};
